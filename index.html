@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>LiftLog — Workout Tracker</title>
+<meta name="description" content="Log exercises with weight, reps and sets. Track progressive overload." />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0f1115" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="LiftLog" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d24;
+    --card2: #22262f;
+    --text: #f2f4f8;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --accent2: #34d399;
+    --danger: #f87171;
+    --border: #2c313c;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+    -webkit-text-size-adjust: 100%;
+  }
+  header {
+    padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 22px; margin: 0; letter-spacing: -0.3px; }
+  header h1 span { color: var(--accent); }
+  .unit-toggle {
+    background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 10px; padding: 6px 12px; font-size: 14px; font-weight: 600;
+  }
+  main { padding: 0 16px; max-width: 560px; margin: 0 auto; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 700; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px 2px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  input, select {
+    width: 100%; padding: 12px; font-size: 17px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--card2); color: var(--text);
+    appearance: none; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .row > div { flex: 1; min-width: 0; }
+
+  .stepper { display: flex; align-items: stretch; }
+  .stepper button {
+    width: 44px; font-size: 22px; font-weight: 700; border: 1px solid var(--border);
+    background: var(--card2); color: var(--accent); flex-shrink: 0;
+  }
+  .stepper button:first-child { border-radius: 10px 0 0 10px; border-right: none; }
+  .stepper button:last-child { border-radius: 0 10px 10px 0; border-left: none; }
+  .stepper input { border-radius: 0; text-align: center; }
+
+  .btn {
+    width: 100%; padding: 14px; font-size: 17px; font-weight: 700;
+    border: none; border-radius: 12px; background: var(--accent); color: #fff;
+    cursor: pointer; transition: transform .08s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn.secondary { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+
+  datalist { display: none; }
+
+  /* Chart */
+  #chartCanvas { width: 100%; height: 240px; display: block; }
+  .chart-empty { color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px; }
+  .legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--muted); justify-content: center; }
+  .legend span::before { content: "●"; margin-right: 5px; }
+  .legend .l-weight::before { color: var(--accent); }
+  .legend .l-1rm::before { color: var(--accent2); }
+  .pr-badge {
+    background: rgba(52, 211, 153, 0.12); color: var(--accent2);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600;
+    margin-top: 10px; text-align: center;
+  }
+
+  /* History */
+  .day-group { margin-bottom: 4px; }
+  .day-label { font-size: 13px; color: var(--muted); font-weight: 700; margin: 14px 2px 8px; }
+  .entry {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .entry .info { min-width: 0; }
+  .entry .name { font-weight: 700; font-size: 15px; }
+  .entry .detail { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .entry .detail b { color: var(--text); font-weight: 600; }
+  .entry .del {
+    background: none; border: none; color: var(--danger); font-size: 13px;
+    font-weight: 600; padding: 8px; cursor: pointer; flex-shrink: 0;
+  }
+  .empty-state { text-align: center; color: var(--muted); padding: 30px 10px; font-size: 14px; }
+
+  /* Tabs */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(26, 29, 36, 0.95); backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    display: flex; padding-bottom: env(safe-area-inset-bottom);
+    z-index: 10;
+  }
+  nav button {
+    flex: 1; background: none; border: none; color: var(--muted);
+    padding: 12px 0 10px; font-size: 11px; font-weight: 600; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  nav button svg { width: 24px; height: 24px; }
+  nav button.active { color: var(--accent); }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent2); color: #08291c; font-weight: 700; font-size: 14px;
+    padding: 10px 20px; border-radius: 99px; opacity: 0; pointer-events: none;
+    transition: all .25s; z-index: 20; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Lift<span>Log</span> 🏋️</h1>
+  <button class="unit-toggle" id="unitToggle">kg</button>
+</header>
+
+<main>
+  <!-- LOG TAB -->
+  <section class="tab active" id="tab-log">
+    <div class="card">
+      <h2>Log a set</h2>
+      <div class="row">
+        <div>
+          <label for="exName">Exercise</label>
+          <input id="exName" type="text" placeholder="e.g. Bench Press" list="exList" autocomplete="off" />
+          <datalist id="exList"></datalist>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="weight">Weight (<span class="unit-label">kg</span>)</label>
+          <div class="stepper">
+            <button type="button" data-step="weight" data-dir="-1">−</button>
+            <input id="weight" type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" />
+            <button type="button" data-step="weight" data-dir="1">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="reps">Reps</label>
+          <div class="stepper">
+            <button type="button" data-step="reps" data-dir="-1">−</button>
+            <input id="reps" type="number" inputmode="numeric" step="1" min="1" placeholder="0" />
+            <button type="button" data-step="reps" data-dir="1">+</button>
+          </div>
+        </div>
+        <div>
+          <label for="sets">Sets</label>
+          <div class="stepper">
+            <button type="button" data-step="sets" data-dir="-1">−</button>
+            <input id="sets" type="number" inputmode="numeric" step="1" min="1" value="1" />
+            <button type="button" data-step="sets" data-dir="1">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="logDate">Date</label>
+          <input id="logDate" type="date" />
+        </div>
+      </div>
+      <button class="btn" id="addBtn">Add to log</button>
+    </div>
+
+    <div class="card" id="lastTimeCard" style="display:none">
+      <h2>Last time you did this</h2>
+      <div id="lastTimeBody" style="color:var(--muted);font-size:14px"></div>
+    </div>
+  </section>
+
+  <!-- PROGRESS TAB -->
+  <section class="tab" id="tab-progress">
+    <div class="card">
+      <h2>Progressive overload</h2>
+      <div class="row">
+        <div>
+          <label for="chartExercise">Exercise</label>
+          <select id="chartExercise"></select>
+        </div>
+      </div>
+      <canvas id="chartCanvas"></canvas>
+      <div class="legend">
+        <span class="l-weight">Top weight</span>
+        <span class="l-1rm">Est. 1RM</span>
+      </div>
+      <div id="prBadge" class="pr-badge" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- HISTORY TAB -->
+  <section class="tab" id="tab-history">
+    <div id="historyList"></div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="log" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    Log
+  </button>
+  <button data-tab="progress">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+    Progress
+  </button>
+  <button data-tab="history">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    History
+  </button>
+</nav>
+
+<div class="toast" id="toast">Set logged ✓</div>
+
+<script>
+(() => {
+  "use strict";
+  const STORE_KEY = "liftlog.entries.v1";
+  const UNIT_KEY = "liftlog.unit";
+
+  /** @type {{id:string, exercise:string, weight:number, reps:number, sets:number, date:string}[]} */
+  let entries = [];
+  let unit = localStorage.getItem(UNIT_KEY) || "kg";
+
+  try { entries = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch (e) { entries = []; }
+
+  const $ = (id) => document.getElementById(id);
+  const exName = $("exName"), weight = $("weight"), reps = $("reps"), sets = $("sets"), logDate = $("logDate");
+
+  function save() { localStorage.setItem(STORE_KEY, JSON.stringify(entries)); }
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  logDate.value = todayStr();
+
+  function fmtDate(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    const today = todayStr();
+    if (iso === today) return "Today";
+    const yest = new Date(); yest.setDate(yest.getDate() - 1);
+    if (dt.toDateString() === yest.toDateString()) return "Yesterday";
+    return dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: dt.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
+  }
+
+  // Epley estimated one-rep max
+  function est1RM(w, r) { return r <= 1 ? w : w * (1 + r / 30); }
+
+  function exerciseNames() {
+    const set = new Set(entries.map(e => e.exercise));
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }
+
+  // ---------- Tabs ----------
+  document.querySelectorAll("nav button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      btn.classList.add("active");
+      $("tab-" + btn.dataset.tab).classList.add("active");
+      if (btn.dataset.tab === "progress") renderChart();
+      if (btn.dataset.tab === "history") renderHistory();
+      window.scrollTo(0, 0);
+    });
+  });
+
+  // ---------- Unit toggle ----------
+  const unitToggle = $("unitToggle");
+  function refreshUnit() {
+    unitToggle.textContent = unit;
+    document.querySelectorAll(".unit-label").forEach(el => el.textContent = unit);
+  }
+  unitToggle.addEventListener("click", () => {
+    unit = unit === "kg" ? "lb" : "kg";
+    localStorage.setItem(UNIT_KEY, unit);
+    refreshUnit();
+    renderChart();
+    renderHistory();
+    renderLastTime();
+  });
+  refreshUnit();
+
+  // ---------- Steppers ----------
+  document.querySelectorAll("[data-step]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const input = $(btn.dataset.step);
+      const dir = Number(btn.dataset.dir);
+      const step = btn.dataset.step === "weight" ? 2.5 : 1;
+      const min = btn.dataset.step === "weight" ? 0 : 1;
+      const cur = parseFloat(input.value) || 0;
+      input.value = Math.max(min, +(cur + dir * step).toFixed(2));
+    });
+  });
+
+  // ---------- Add entry ----------
+  $("addBtn").addEventListener("click", () => {
+    const name = exName.value.trim();
+    const w = parseFloat(weight.value);
+    const r = parseInt(reps.value, 10);
+    const s = parseInt(sets.value, 10) || 1;
+    if (!name) { exName.focus(); return; }
+    if (!(w >= 0)) { weight.focus(); return; }
+    if (!(r >= 1)) { reps.focus(); return; }
+
+    entries.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      exercise: name, weight: w, reps: r, sets: s,
+      date: logDate.value || todayStr()
+    });
+    save();
+    refreshDatalist();
+    renderLastTime();
+    refreshChartSelect();
+
+    const toast = $("toast");
+    toast.textContent = `${name} — ${w}${unit} × ${r} × ${s} ✓`;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1800);
+  });
+
+  // ---------- Exercise autocomplete & "last time" ----------
+  function refreshDatalist() {
+    $("exList").innerHTML = exerciseNames().map(n => `<option value="${escapeHtml(n)}">`).join("");
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function renderLastTime() {
+    const name = exName.value.trim().toLowerCase();
+    const card = $("lastTimeCard");
+    if (!name) { card.style.display = "none"; return; }
+    const matches = entries.filter(e => e.exercise.toLowerCase() === name);
+    if (!matches.length) { card.style.display = "none"; return; }
+    matches.sort((a, b) => b.date.localeCompare(a.date));
+    const lastDate = matches[0].date;
+    const sameDay = matches.filter(e => e.date === lastDate);
+    card.style.display = "";
+    $("lastTimeBody").innerHTML = `<b style="color:var(--text)">${fmtDate(lastDate)}</b><br>` +
+      sameDay.map(e => `${e.weight}${unit} × ${e.reps} reps × ${e.sets} sets`).join("<br>");
+  }
+  exName.addEventListener("input", renderLastTime);
+
+  // ---------- History ----------
+  function renderHistory() {
+    const list = $("historyList");
+    if (!entries.length) {
+      list.innerHTML = `<div class="empty-state">No workouts logged yet.<br>Add your first set on the Log tab! 💪</div>`;
+      return;
+    }
+    const byDate = {};
+    for (const e of entries) (byDate[e.date] = byDate[e.date] || []).push(e);
+    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+    list.innerHTML = dates.map(date => `
+      <div class="day-group">
+        <div class="day-label">${fmtDate(date)}</div>
+        ${byDate[date].map(e => `
+          <div class="entry">
+            <div class="info">
+              <div class="name">${escapeHtml(e.exercise)}</div>
+              <div class="detail"><b>${e.weight}${unit}</b> × ${e.reps} reps × ${e.sets} sets · vol ${Math.round(e.weight * e.reps * e.sets)}</div>
+            </div>
+            <button class="del" data-id="${e.id}">Delete</button>
+          </div>`).join("")}
+      </div>`).join("");
+
+    list.querySelectorAll(".del").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Delete this entry?")) return;
+        entries = entries.filter(e => e.id !== btn.dataset.id);
+        save();
+        renderHistory();
+        refreshDatalist();
+        refreshChartSelect();
+      });
+    });
+  }
+
+  // ---------- Chart ----------
+  const canvas = $("chartCanvas");
+  const chartSelect = $("chartExercise");
+
+  function refreshChartSelect() {
+    const names = exerciseNames();
+    const cur = chartSelect.value;
+    chartSelect.innerHTML = names.length
+      ? names.map(n => `<option ${n === cur ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")
+      : `<option value="">No exercises yet</option>`;
+  }
+  chartSelect.addEventListener("change", renderChart);
+
+  function renderChart() {
+    refreshChartSelect();
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = 240;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const name = chartSelect.value;
+    const prBadge = $("prBadge");
+    prBadge.style.display = "none";
+
+    const data = entries.filter(e => e.exercise === name);
+    if (!name || !data.length) {
+      ctx.fillStyle = "#9aa3b2";
+      ctx.font = "14px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Log some sets to see your progress 📈", W / 2, H / 2);
+      return;
+    }
+
+    // One point per day: best (heaviest) set that day + best est. 1RM
+    const byDate = {};
+    for (const e of data) {
+      const d = byDate[e.date] = byDate[e.date] || { w: 0, rm: 0 };
+      d.w = Math.max(d.w, e.weight);
+      d.rm = Math.max(d.rm, est1RM(e.weight, e.reps));
+    }
+    const points = Object.keys(byDate).sort().map(date => ({ date, w: byDate[date].w, rm: byDate[date].rm }));
+
+    const pad = { l: 38, r: 12, t: 14, b: 26 };
+    const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+    const allVals = points.flatMap(p => [p.w, p.rm]);
+    let maxV = Math.max(...allVals), minV = Math.min(...allVals);
+    if (maxV === minV) { maxV += 5; minV = Math.max(0, minV - 5); }
+    const range = maxV - minV;
+    maxV += range * 0.1; minV = Math.max(0, minV - range * 0.1);
+
+    const xAt = (i) => points.length === 1 ? pad.l + plotW / 2 : pad.l + (i / (points.length - 1)) * plotW;
+    const yAt = (v) => pad.t + plotH - ((v - minV) / (maxV - minV)) * plotH;
+
+    // Gridlines + y labels
+    ctx.strokeStyle = "#2c313c"; ctx.fillStyle = "#9aa3b2";
+    ctx.font = "10px -apple-system, sans-serif"; ctx.textAlign = "right"; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const v = minV + (i / 4) * (maxV - minV);
+      const y = yAt(v);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+      ctx.fillText(Math.round(v), pad.l - 6, y + 3);
+    }
+
+    // x labels (first, middle, last)
+    ctx.textAlign = "center";
+    const labelIdx = points.length <= 3 ? points.map((_, i) => i) : [0, Math.floor((points.length - 1) / 2), points.length - 1];
+    for (const i of labelIdx) {
+      const [, m, d] = points[i].date.split("-");
+      ctx.fillText(`${Number(m)}/${Number(d)}`, xAt(i), H - 8);
+    }
+
+    function drawLine(key, color) {
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineJoin = "round";
+      ctx.beginPath();
+      points.forEach((p, i) => i === 0 ? ctx.moveTo(xAt(i), yAt(p[key])) : ctx.lineTo(xAt(i), yAt(p[key])));
+      ctx.stroke();
+      ctx.fillStyle = color;
+      points.forEach((p, i) => {
+        ctx.beginPath(); ctx.arc(xAt(i), yAt(p[key]), 3.5, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+    drawLine("rm", "#34d399");
+    drawLine("w", "#4f8cff");
+
+    // PR badge
+    const best = points.reduce((a, p) => p.w > a.w ? p : a, points[0]);
+    const latest = points[points.length - 1];
+    prBadge.style.display = "";
+    if (latest.w >= best.w && points.length > 1) {
+      prBadge.textContent = `🎉 All-time PR: ${latest.w}${unit} — keep it up!`;
+    } else {
+      prBadge.textContent = `Best: ${best.w}${unit} (${fmtDate(best.date)}) · Latest: ${latest.w}${unit}`;
+    }
+  }
+  window.addEventListener("resize", () => {
+    if ($("tab-progress").classList.contains("active")) renderChart();
+  });
+
+  // ---------- Init ----------
+  refreshDatalist();
+  refreshChartSelect();
+  renderHistory();
+
+  // Offline support
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
