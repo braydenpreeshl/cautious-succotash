@@ -42,7 +42,10 @@ function loadState() {
 function todayISO(d = new Date()) {
   const t = new Date(d);
   t.setHours(0, 0, 0, 0);
-  return t.toISOString().slice(0, 10);
+  const year = t.getFullYear();
+  const month = String(t.getMonth() + 1).padStart(2, "0");
+  const day = String(t.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function addDays(date, days) {
@@ -289,6 +292,20 @@ function suggestStudySessions(assignments, daysAhead = 14) {
     }
   });
   return sessions;
+}
+
+function mergeSessions(existingSessions, incomingSessions) {
+  const keyOf = (s) => `${s.assignmentId}|${s.dateISO}|${s.minutes}`;
+  const seen = new Set(existingSessions.map(keyOf));
+  const merged = existingSessions.slice();
+  for (const sess of incomingSessions) {
+    const key = keyOf(sess);
+    if (!seen.has(key)) {
+      merged.push(sess);
+      seen.add(key);
+    }
+  }
+  return merged;
 }
 
 function humanDate(iso) {
@@ -846,7 +863,7 @@ function UpgradeModal({ accent, onClose, onUpgrade }) {
 export default function App() {
   const [state, setState] = useState(() => loadState() || defaultState);
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const lastSaved = useRef(0);
+  const saveTimer = useRef(null);
 
   // Daily streak tracking
   useEffect(() => {
@@ -860,13 +877,20 @@ export default function App() {
     // eslint-disable-next-line
   }, []);
 
-  // Persist (throttle)
+  // Persist (debounced to avoid excessive writes, ensures trailing save)
   useEffect(() => {
-    const now = Date.now();
-    if (now - lastSaved.current > 400) {
-      saveState(state);
-      lastSaved.current = now;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
     }
+    saveTimer.current = setTimeout(() => {
+      saveState(state);
+      saveTimer.current = null;
+    }, 400);
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
+    };
   }, [state]);
 
   function openUpgrade(reason) {
